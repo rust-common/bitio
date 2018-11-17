@@ -1,5 +1,6 @@
-# bitio
-Bit IO. Read and write bits to IO.
+# Bit Read/Write
+
+Bit IO. Read and write bits to `Read`/`Write` traits.
 
 ## Other Crates
 
