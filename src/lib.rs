@@ -72,7 +72,7 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
 /// let mut v = vec![];
 /// {
 ///     let mut c = std::io::Cursor::new(&mut v);
-///     bit_io::with_bit_writer(&mut c, &mut |w| {
+///     bitrw::with_bit_writer(&mut c, &mut |w| {
 ///         w.write(0, 0); //  0
 ///         w.write(1, 1); //  1
 ///         w.write(2, 2); //  3
@@ -100,9 +100,9 @@ pub fn with_bit_writer<R>(
 /// Provides `BitRead` from a `Read`.
 ///
 /// ```
-/// use bit_io::BitRead;
+/// use bitrw::BitRead;
 /// let mut c = std::io::Cursor::new(&[0b00_11_10_1_0, 0b1_110_101_1, 0b1101000]);
-/// let mut r = bit_io::BitReadAdapter::new(&mut c);
+/// let mut r = bitrw::BitReadAdapter::new(&mut c);
 /// assert_eq!(r.read(0).unwrap(), 0);
 /// assert_eq!(r.read(1).unwrap(), 0);
 /// assert_eq!(r.read(1).unwrap(), 1);
