@@ -1,5 +1,5 @@
 [package]
-name = "bitio"
+name = "bit_io"
 version = "0.1.0"
 authors = ["Sergey Shandar"]
 description = "Bit IO"
