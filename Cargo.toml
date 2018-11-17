@@ -1,0 +1,7 @@
+[package]
+name = "bitio"
+version = "0.1.0"
+authors = ["Sergey Shandar"]
+
+[dependencies]
+base2 = { git = "https://github.com/rust-common/base2", version="0.1.0" }
