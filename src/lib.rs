@@ -53,7 +53,7 @@ pub struct BitWriteAdapter<'t> {
 }
 
 impl<'t> BitWriteAdapter<'t> {
-    fn flush(&mut self) -> std::io::Result<()> {
+    pub fn flush(&mut self) -> std::io::Result<()> {
         self.w.write_all(&[self.buffer])
     }
 }
