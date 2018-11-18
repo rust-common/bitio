@@ -1,3 +1,7 @@
+extern crate base2;
+
+use base2::Base2;
+
 fn fold_size<R>(
     mut size: u8,
     f: &mut FnMut(u8, u8, R) -> std::io::Result<R>,
@@ -139,6 +143,6 @@ impl<'t> BitRead for BitReadAdapter<'t> {
         };
         self.size -= size;
         self.buffer = (b16 >> size) as u8;
-        Ok((b16 & base2::mask(size) as u16) as u8)
+        Ok((b16 & u16::mask(size)) as u8)
     }
 }
