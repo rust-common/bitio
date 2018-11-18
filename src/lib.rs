@@ -53,8 +53,21 @@ pub struct BitWriteAdapter<'t> {
 }
 
 impl<'t> BitWriteAdapter<'t> {
-    pub fn flush(&mut self) -> std::io::Result<()> {
+    fn write_buffer(&mut self) -> std::io::Result<()> {
         self.w.write_all(&[self.buffer])
+    }
+    pub fn close(&mut self) -> std::io::Result<()> {
+        if self.size > 0 {
+            self.write_buffer()?;
+            self.size = 0;
+        }
+        Ok(())
+    }
+}
+
+impl<'t> Drop for BitWriteAdapter<'t> {
+    fn drop(&mut self) {
+        let _ignore_error = self.close();
     }
 }
 
@@ -64,7 +77,7 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
         self.buffer |= value << self.size;
         self.size += size;
         if self.size >= 8 {
-            self.flush()?;
+            self.write_buffer()?;
             self.size -= 8;
             self.buffer = value >> (size - self.size)
         }
@@ -98,9 +111,7 @@ pub fn with_bit_writer<R>(
 ) -> std::io::Result<R> {
     let mut adapter = BitWriteAdapter { w: w, buffer: 0, size: 0 };
     let result = f(&mut adapter)?;
-    if adapter.size > 0 {
-        adapter.flush()?;
-    }
+    adapter.close()?;
     Ok(result)
 }
 
