@@ -1,6 +1,6 @@
 [package]
 name = "bitrw"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Sergey Shandar"]
 description = "Bit Read/Write"
 license = "Apache-2.0"
@@ -8,3 +8,4 @@ repository = "https://github.com/rust-common/bitrw"
 
 [dependencies]
 base2 = "^0.2.2"
+int = "^0.2.10"

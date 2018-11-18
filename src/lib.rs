@@ -1,6 +1,8 @@
 extern crate base2;
+extern crate int;
 
 use base2::Base2;
+use int::UInt;
 
 fn fold_size<R>(
     mut size: u8,
@@ -20,30 +22,30 @@ fn fold_size<R>(
 }
 
 pub trait BitWrite {
-    fn write(&mut self, value: u8, size: u8) -> std::io::Result<()>;
+    fn write_u8(&mut self, value: u8, size: u8) -> std::io::Result<()>;
     // Little-endian.
-    fn write32(&mut self, value: u32, size: u8) -> std::io::Result<()> {
+    fn write<T: UInt>(&mut self, value: T, size: u8) -> std::io::Result<()> {
         fold_size(
             size,
-            &mut |o, s, _| self.write((value >> o) as u8, s),
+            &mut |o, s, _| self.write_u8((value >> o).as_(), s),
             ()
         )
     }
 }
 
 pub trait BitRead {
-    fn read(&mut self, size: u8) -> std::io::Result<u8>;
+    fn read_u8(&mut self, size: u8) -> std::io::Result<u8>;
     // Little-endian.
-    fn read32(&mut self, size: u8) -> std::io::Result<u32> {
+    fn read<T: UInt>(&mut self, size: u8) -> std::io::Result<T> {
         fold_size(
             size,
-            &mut |o, s, r| Ok(r | ((self.read(s)? as u32) << o)),
-            0
+            &mut |o, s, r| Ok(r | (T::from_u8(self.read_u8(s)?) << o)),
+            T::_0
         )
     }
 }
 
-struct BitWriteAdapter<'t> {
+pub struct BitWriteAdapter<'t> {
     w: &'t mut std::io::Write,
     buffer: u8,
     // 0..7
@@ -58,7 +60,7 @@ impl<'t> BitWriteAdapter<'t> {
 
 impl<'t> BitWrite for BitWriteAdapter<'t> {
     // size is in [0..8]
-    fn write(&mut self, value: u8, size: u8) -> std::io::Result<()> {
+    fn write_u8(&mut self, value: u8, size: u8) -> std::io::Result<()> {
         self.buffer |= value << self.size;
         self.size += size;
         if self.size >= 8 {
@@ -75,15 +77,16 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
 /// ```
 /// let mut v = vec![];
 /// {
+///     use bitrw::BitWrite;
 ///     let mut c = std::io::Cursor::new(&mut v);
 ///     bitrw::with_bit_writer(&mut c, &mut |w| {
-///         w.write(0, 0); //  0
-///         w.write(1, 1); //  1
-///         w.write(2, 2); //  3
-///         w.write(3, 3); //  6
-///         w.write(4, 4); // 10
-///         w.write(5, 5); // 15
-///         w.write(6, 6); // 21
+///         w.write(0_u8, 0); //  0
+///         w.write(1_u16, 1); //  1
+///         w.write(2_u32, 2); //  3
+///         w.write(3_u64, 3); //  6
+///         w.write(4_u128, 4); // 10
+///         w.write(5_usize, 5); // 15
+///         w.write(6_u8, 6); // 21
 ///         Ok(())
 ///     });
 /// }
@@ -91,7 +94,7 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
 /// ```
 pub fn with_bit_writer<R>(
     w: &mut std::io::Write,
-    f: &mut Fn(&mut BitWrite) -> std::io::Result<R>
+    f: &mut Fn(&mut BitWriteAdapter) -> std::io::Result<R>
 ) -> std::io::Result<R> {
     let mut adapter = BitWriteAdapter { w: w, buffer: 0, size: 0 };
     let result = f(&mut adapter)?;
@@ -107,15 +110,15 @@ pub fn with_bit_writer<R>(
 /// use bitrw::BitRead;
 /// let mut c = std::io::Cursor::new(&[0b00_11_10_1_0, 0b1_110_101_1, 0b1101000]);
 /// let mut r = bitrw::BitReadAdapter::new(&mut c);
-/// assert_eq!(r.read(0).unwrap(), 0);
-/// assert_eq!(r.read(1).unwrap(), 0);
-/// assert_eq!(r.read(1).unwrap(), 1);
-/// assert_eq!(r.read(2).unwrap(), 2);
-/// assert_eq!(r.read(2).unwrap(), 3);
-/// assert_eq!(r.read(3).unwrap(), 4);
-/// assert_eq!(r.read(3).unwrap(), 5);
-/// assert_eq!(r.read(3).unwrap(), 6);
-/// assert_eq!(r.read(8).unwrap(), 0b11010001);
+/// assert_eq!(r.read::<u8>(0).unwrap(), 0);
+/// assert_eq!(r.read::<u16>(1).unwrap(), 0);
+/// assert_eq!(r.read::<u32>(1).unwrap(), 1);
+/// assert_eq!(r.read::<u64>(2).unwrap(), 2);
+/// assert_eq!(r.read::<u128>(2).unwrap(), 3);
+/// assert_eq!(r.read::<usize>(3).unwrap(), 4);
+/// assert_eq!(r.read::<u8>(3).unwrap(), 5);
+/// assert_eq!(r.read::<u16>(3).unwrap(), 6);
+/// assert_eq!(r.read::<u32>(8).unwrap(), 0b11010001);
 /// ```
 pub struct BitReadAdapter<'t> {
     r: &'t mut std::io::Read,
@@ -131,7 +134,7 @@ impl<'t> BitReadAdapter<'t> {
 }
 
 impl<'t> BitRead for BitReadAdapter<'t> {
-    fn read(&mut self, size: u8) -> std::io::Result<u8> {
+    fn read_u8(&mut self, size: u8) -> std::io::Result<u8> {
         let b16 = if self.size >= size {
             self.buffer as u16
         } else {
