@@ -101,7 +101,7 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
 ///         w.write(4_u128, 4)?; // 10
 ///         w.write(5_usize, 5)?; // 15
 ///         w.write(6_u8, 6)?; // 21
-///         w.write(0xFFFF_u16, 12)?; // 32
+///         w.write(0xFFFF_u16, 12)?; // 33
 ///         Ok(())
 ///     });
 /// }
