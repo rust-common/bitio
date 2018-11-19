@@ -56,7 +56,7 @@ impl<'t> BitWriteAdapter<'t> {
     fn write_buffer(&mut self) -> std::io::Result<()> {
         self.w.write_all(&[self.buffer])
     }
-    pub fn close(&mut self) -> std::io::Result<()> {
+    pub fn io_drop(&mut self) -> std::io::Result<()> {
         if self.size > 0 {
             self.write_buffer()?;
             self.size = 0;
@@ -67,7 +67,7 @@ impl<'t> BitWriteAdapter<'t> {
 
 impl<'t> Drop for BitWriteAdapter<'t> {
     fn drop(&mut self) {
-        let _ignore_error = self.close();
+        let _ignore_error = self.io_drop();
     }
 }
 
@@ -111,7 +111,7 @@ pub fn with_bit_writer<R>(
 ) -> std::io::Result<R> {
     let mut adapter = BitWriteAdapter { w: w, buffer: 0, size: 0 };
     let result = f(&mut adapter)?;
-    adapter.close()?;
+    adapter.io_drop()?;
     Ok(result)
 }
 
