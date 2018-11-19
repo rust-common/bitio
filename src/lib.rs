@@ -73,7 +73,8 @@ impl<'t> Drop for BitWriteAdapter<'t> {
 
 impl<'t> BitWrite for BitWriteAdapter<'t> {
     // size is in [0..8]
-    fn write_u8(&mut self, value: u8, size: u8) -> std::io::Result<()> {
+    fn write_u8(&mut self, mut value: u8, size: u8) -> std::io::Result<()> {
+        value &= u8::mask(size);
         self.buffer |= value << self.size;
         self.size += size;
         if self.size >= 8 {
@@ -100,10 +101,11 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
 ///         w.write(4_u128, 4)?; // 10
 ///         w.write(5_usize, 5)?; // 15
 ///         w.write(6_u8, 6)?; // 21
+///         w.write(0xFFFF_u16, 12)?; // 32
 ///         Ok(())
 ///     });
 /// }
-/// assert_eq!(v, [0b00_011_10_1, 0b0_00101_01, 0b00011]);
+/// assert_eq!(v, [0b00_011_10_1, 0b0_00101_01, 0b111_00011, 0b11111111, 0b1]);
 /// ```
 pub fn with_bit_writer<R>(
     w: &mut std::io::Write,
