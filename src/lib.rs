@@ -56,7 +56,7 @@ impl<'t> BitWriteAdapter<'t> {
     fn write_buffer(&mut self) -> std::io::Result<()> {
         self.w.write_all(&[self.buffer])
     }
-    pub fn io_drop(&mut self) -> std::io::Result<()> {
+    fn io_drop(&mut self) -> std::io::Result<()> {
         if self.size > 0 {
             self.write_buffer()?;
             self.size = 0;
