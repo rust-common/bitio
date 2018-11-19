@@ -93,13 +93,13 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
 ///     use bitrw::BitWrite;
 ///     let mut c = std::io::Cursor::new(&mut v);
 ///     bitrw::with_bit_writer(&mut c, &mut |w| {
-///         w.write(0_u8, 0); //  0
-///         w.write(1_u16, 1); //  1
-///         w.write(2_u32, 2); //  3
-///         w.write(3_u64, 3); //  6
-///         w.write(4_u128, 4); // 10
-///         w.write(5_usize, 5); // 15
-///         w.write(6_u8, 6); // 21
+///         w.write(0_u8, 0)?; //  0
+///         w.write(1_u16, 1)?; //  1
+///         w.write(2_u32, 2)?; //  3
+///         w.write(3_u64, 3)?; //  6
+///         w.write(4_u128, 4)?; // 10
+///         w.write(5_usize, 5)?; // 15
+///         w.write(6_u8, 6)?; // 21
 ///         Ok(())
 ///     });
 /// }
