@@ -86,43 +86,47 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
     }
 }
 
-/// Creates a `BitWrite` object and pass it to the given scope function `f`.
-///
-/// ```
-/// let mut v = vec![];
-/// {
-///     use bitrw::BitWrite;
-///     let mut c = std::io::Cursor::new(&mut v);
-///     bitrw::with_bit_writer(&mut c, &mut |w| {
-///         w.write(0_u8, 0)?; //  0
-///         w.write(1_u16, 1)?; //  1
-///         w.write(2_u32, 2)?; //  3
-///         w.write(3_u64, 3)?; //  6
-///         w.write(4_u128, 4)?; // 10
-///         w.write(5_usize, 5)?; // 15
-///         w.write(6_u8, 6)?; // 21
-///         w.write(0xFFFF_u16, 12)?; // 33
-///         Ok(())
-///     });
-/// }
-/// assert_eq!(v, [0b00_011_10_1, 0b0_00101_01, 0b111_00011, 0b11111111, 0b1]);
-/// ```
-pub fn with_bit_writer<R>(
-    w: &mut std::io::Write,
-    f: &mut Fn(&mut BitWriteAdapter) -> std::io::Result<R>
-) -> std::io::Result<R> {
-    let mut adapter = BitWriteAdapter { w: w, buffer: 0, size: 0 };
-    let result = f(&mut adapter)?;
-    adapter.io_drop()?;
-    Ok(result)
+pub trait WriteBits {
+    /// Creates a `BitWrite` object and pass it to the given scope function `f`.
+    ///
+    /// ```
+    /// let mut v = vec![];
+    /// {
+    ///     use bitrw::WriteBits;
+    ///     std::io::Cursor::new(&mut v).write_bits(&mut |w| {
+    ///         use bitrw::BitWrite;
+    ///         w.write(0_u8, 0)?; //  0
+    ///         w.write(1_u16, 1)?; //  1
+    ///         w.write(2_u32, 2)?; //  3
+    ///         w.write(3_u64, 3)?; //  6
+    ///         w.write(4_u128, 4)?; // 10
+    ///         w.write(5_usize, 5)?; // 15
+    ///         w.write(6_u8, 6)?; // 21
+    ///         w.write(0xFFFF_u16, 12)?; // 33
+    ///         Ok(())
+    ///     });
+    /// }
+    /// assert_eq!(v, [0b00_011_10_1, 0b0_00101_01, 0b111_00011, 0b11111111, 0b1]);
+    /// ```
+    fn write_bits<R>(&mut self, f: &mut Fn(&mut BitWriteAdapter) -> std::io::Result<R>) -> std::io::Result<R>;
+}
+
+impl<T> WriteBits for T where T: std::io::Write {
+    fn write_bits<R>(&mut self, f: &mut Fn(&mut BitWriteAdapter) -> std::io::Result<R>) -> std::io::Result<R> {
+        let mut adapter = BitWriteAdapter { w: self, buffer: 0, size: 0 };
+        let result = f(&mut adapter)?;
+        adapter.io_drop()?;
+        Ok(result)
+    }
 }
 
 /// Provides `BitRead` from a `Read`.
 ///
 /// ```
 /// use bitrw::BitRead;
+/// use bitrw::ReadBits;
 /// let mut c = std::io::Cursor::new(&[0b00_11_10_1_0, 0b1_110_101_1, 0b1101000]);
-/// let mut r = bitrw::BitReadAdapter::new(&mut c);
+/// let mut r = c.read_bits();
 /// assert_eq!(r.read::<u8>(0).unwrap(), 0);
 /// assert_eq!(r.read::<u16>(1).unwrap(), 0);
 /// assert_eq!(r.read::<u32>(1).unwrap(), 1);
@@ -140,11 +144,23 @@ pub struct BitReadAdapter<'t> {
     size: u8,
 }
 
+pub trait ReadBits {
+    fn read_bits<'t>(&'t mut self) -> BitReadAdapter<'t>;
+}
+
+impl<T> ReadBits for T where T: std::io::Read {
+    fn read_bits<'t>(&'t mut self) -> BitReadAdapter<'t> {
+        BitReadAdapter { r: self, buffer: 0, size: 0 }
+    }
+}
+
+/*
 impl<'t> BitReadAdapter<'t> {
     pub fn new(r: &'t mut std::io::Read) -> Self {
         Self { r: r, buffer: 0, size: 0 }
     }
 }
+*/
 
 impl<'t> BitRead for BitReadAdapter<'t> {
     fn read_u8(&mut self, size: u8) -> std::io::Result<u8> {
