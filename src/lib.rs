@@ -1,9 +1,12 @@
 extern crate base2;
 extern crate int;
 
-use base2::Base2;
-use int::UInt;
-
+/// - `size` is the size of read/write item.
+/// - `f` is a read/write function.
+///   1. `offset`
+///   1. `size`
+///   1. current `value`
+/// - initial `value`
 fn fold_size<R>(
     mut size: u8,
     f: &mut FnMut(u8, u8, R) -> std::io::Result<R>,
@@ -21,41 +24,23 @@ fn fold_size<R>(
     Ok(result)
 }
 
-pub trait BitWrite {
-    fn write_u8(&mut self, value: u8, size: u8) -> std::io::Result<()>;
-    // Little-endian.
-    fn write<T: UInt>(&mut self, value: T, size: u8) -> std::io::Result<()> {
-        fold_size(
-            size,
-            &mut |o, s, _| self.write_u8((value >> o).as_(), s),
-            ()
-        )
-    }
-}
-
-pub trait BitRead {
-    fn read_u8(&mut self, size: u8) -> std::io::Result<u8>;
-    // Little-endian.
-    fn read<T: UInt>(&mut self, size: u8) -> std::io::Result<T> {
-        fold_size(
-            size,
-            &mut |o, s, r| Ok(r | (T::from_u8(self.read_u8(s)?) << o)),
-            T::_0
-        )
-    }
-}
-
-pub struct BitWriteAdapter<'t> {
+/// The structure is required to cache unsaved bits.
+/// The unsaved bits will be written when `io_drop()` or `drop()` is called.
+/// Don't create the structure directly.
+/// Use the `UseBitWrite::use_bit_write()` function to write bits.
+pub struct BitWrite<'t> {
     w: &'t mut std::io::Write,
     buffer: u8,
     // 0..7
     size: u8,
 }
 
-impl<'t> BitWriteAdapter<'t> {
+impl BitWrite<'_> {
+
     fn write_buffer(&mut self) -> std::io::Result<()> {
         self.w.write_all(&[self.buffer])
     }
+
     fn io_drop(&mut self) -> std::io::Result<()> {
         if self.size > 0 {
             self.write_buffer()?;
@@ -63,17 +48,10 @@ impl<'t> BitWriteAdapter<'t> {
         }
         Ok(())
     }
-}
 
-impl<'t> Drop for BitWriteAdapter<'t> {
-    fn drop(&mut self) {
-        let _ignore_error = self.io_drop();
-    }
-}
-
-impl<'t> BitWrite for BitWriteAdapter<'t> {
-    // size is in [0..8]
+    /// - `size` is in the [0..8] range.
     fn write_u8(&mut self, mut value: u8, size: u8) -> std::io::Result<()> {
+        use base2::Base2;
         value &= u8::mask(size);
         self.buffer |= value << self.size;
         self.size += size;
@@ -84,17 +62,31 @@ impl<'t> BitWrite for BitWriteAdapter<'t> {
         }
         Ok(())
     }
+
+    /// Little-endian bit write.
+    pub fn write<T: int::UInt>(&mut self, value: T, size: u8) -> std::io::Result<()> {
+        fold_size(
+            size,
+            &mut |o, s, _| self.write_u8((value >> o).as_(), s),
+            ()
+        )
+    }
 }
 
-pub trait WriteBits {
+impl Drop for BitWrite<'_> {
+    fn drop(&mut self) {
+        let _ignore_error = self.io_drop();
+    }
+}
+
+pub trait UseBitWrite: Sized + std::io::Write {
     /// Creates a `BitWrite` object and pass it to the given scope function `f`.
     ///
     /// ```
     /// let mut v = vec![];
     /// {
-    ///     use bitrw::WriteBits;
-    ///     std::io::Cursor::new(&mut v).write_bits(&mut |w| {
-    ///         use bitrw::BitWrite;
+    ///     use bitrw::UseBitWrite;
+    ///     std::io::Cursor::new(&mut v).use_bit_write(&mut |w| {
     ///         w.write(0_u8, 0)?; //  0
     ///         w.write(1_u16, 1)?; //  1
     ///         w.write(2_u32, 2)?; //  3
@@ -108,25 +100,25 @@ pub trait WriteBits {
     /// }
     /// assert_eq!(v, [0b00_011_10_1, 0b0_00101_01, 0b111_00011, 0b11111111, 0b1]);
     /// ```
-    fn write_bits<R>(&mut self, f: &mut Fn(&mut BitWriteAdapter) -> std::io::Result<R>) -> std::io::Result<R>;
-}
-
-impl<T> WriteBits for T where T: std::io::Write {
-    fn write_bits<R>(&mut self, f: &mut Fn(&mut BitWriteAdapter) -> std::io::Result<R>) -> std::io::Result<R> {
-        let mut adapter = BitWriteAdapter { w: self, buffer: 0, size: 0 };
+    fn use_bit_write<R>(
+        &mut self,
+        f: &mut Fn(&mut BitWrite) -> std::io::Result<R>
+    ) -> std::io::Result<R> {
+        let mut adapter = BitWrite { w: self, buffer: 0, size: 0 };
         let result = f(&mut adapter)?;
         adapter.io_drop()?;
         Ok(result)
     }
 }
 
+impl<T: std::io::Write> UseBitWrite for T {}
+
 /// Provides `BitRead` from a `Read`.
 ///
 /// ```
-/// use bitrw::BitRead;
-/// use bitrw::ReadBits;
+/// use bitrw::UseBitRead;
 /// let mut c = std::io::Cursor::new(&[0b00_11_10_1_0, 0b1_110_101_1, 0b1101000]);
-/// let mut r = c.read_bits();
+/// let mut r = c.use_bit_read();
 /// assert_eq!(r.read::<u8>(0).unwrap(), 0);
 /// assert_eq!(r.read::<u16>(1).unwrap(), 0);
 /// assert_eq!(r.read::<u32>(1).unwrap(), 1);
@@ -137,33 +129,16 @@ impl<T> WriteBits for T where T: std::io::Write {
 /// assert_eq!(r.read::<u16>(3).unwrap(), 6);
 /// assert_eq!(r.read::<u32>(8).unwrap(), 0b11010001);
 /// ```
-pub struct BitReadAdapter<'t> {
+pub struct BitRead<'t> {
     r: &'t mut std::io::Read,
     buffer: u8,
     // 0..7
     size: u8,
 }
 
-pub trait ReadBits {
-    fn read_bits<'t>(&'t mut self) -> BitReadAdapter<'t>;
-}
-
-impl<T> ReadBits for T where T: std::io::Read {
-    fn read_bits<'t>(&'t mut self) -> BitReadAdapter<'t> {
-        BitReadAdapter { r: self, buffer: 0, size: 0 }
-    }
-}
-
-/*
-impl<'t> BitReadAdapter<'t> {
-    pub fn new(r: &'t mut std::io::Read) -> Self {
-        Self { r: r, buffer: 0, size: 0 }
-    }
-}
-*/
-
-impl<'t> BitRead for BitReadAdapter<'t> {
+impl BitRead<'_> {
     fn read_u8(&mut self, size: u8) -> std::io::Result<u8> {
+        use base2::Base2;
         let b16 = if self.size >= size {
             self.buffer as u16
         } else {
@@ -177,4 +152,21 @@ impl<'t> BitRead for BitReadAdapter<'t> {
         self.buffer = (b16 >> size) as u8;
         Ok((b16 & u16::mask(size)) as u8)
     }
+
+    /// Little-endian bit read.
+    pub fn read<T: int::UInt>(&mut self, size: u8) -> std::io::Result<T> {
+        fold_size(
+            size,
+            &mut |o, s, r| Ok(r | (T::from_u8(self.read_u8(s)?) << o)),
+            T::_0
+        )
+    }
 }
+
+pub trait UseBitRead: Sized + std::io::Read {
+    fn use_bit_read(&mut self) -> BitRead {
+        BitRead { r: self, buffer: 0, size: 0 }
+    }
+}
+
+impl<T: std::io::Read> UseBitRead for T {}
