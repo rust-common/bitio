@@ -1,6 +1,6 @@
 [package]
 name = "bitrw"
-version = "0.7.1"
+version = "0.8.0"
 authors = ["Sergey Shandar"]
 description = "Bit Read/Write"
 license = "Apache-2.0"

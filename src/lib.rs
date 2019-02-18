@@ -109,30 +109,30 @@ pub trait UseBitWrite: Sized + std::io::Write {
         adapter.io_drop()?;
         Ok(result)
     }
+}
 
-    /// Creates a `BitWrite` object in memory and pass it to the given scope function `f`.
-    ///
-    /// ```
-    /// let v = bitrw::UseBitWrite::use_bit_write_mem(&mut |w| {
-    ///     w.write(0_u8, 0)?; //  0
-    ///     w.write(1_u16, 1)?; //  1
-    ///     w.write(2_u32, 2)?; //  3
-    ///     w.write(3_u64, 3)?; //  6
-    ///     w.write(4_u128, 4)?; // 10
-    ///     w.write(5_usize, 5)?; // 15
-    ///     w.write(6_u8, 6)?; // 21
-    ///     w.write(0xFFFF_u16, 12)?; // 33
-    ///     Ok(())
-    /// });
-    /// assert_eq!(v, [0b00_011_10_1, 0b0_00101_01, 0b111_00011, 0b11111111, 0b1]);
-    /// ```
-    fn use_bit_write_mem(f: &mut Fn(&mut BitWrite) -> std::io::Result<()>) -> std::io::Result<Vec<u8>> {
-        let mut result = vec![];
-        {
-            std::io::Cursor::new(&mut result).use_bit_write(f)?;
-        }
-        Ok(result)
+/// Creates a `BitWrite` object in memory and pass it to the given scope function `f`.
+///
+/// ```
+/// let v = bitrw::use_bit_write_mem(&mut |w| {
+///     w.write(0_u8, 0)?; //  0
+///     w.write(1_u16, 1)?; //  1
+///     w.write(2_u32, 2)?; //  3
+///     w.write(3_u64, 3)?; //  6
+///     w.write(4_u128, 4)?; // 10
+///     w.write(5_usize, 5)?; // 15
+///     w.write(6_u8, 6)?; // 21
+///     w.write(0xFFFF_u16, 12)?; // 33
+///     Ok(())
+/// });
+/// assert_eq!(v.ok(), Some(vec![0b00_011_10_1, 0b0_00101_01, 0b111_00011, 0b11111111, 0b1]));
+/// ```
+pub fn use_bit_write_mem(f: &mut Fn(&mut BitWrite) -> std::io::Result<()>) -> std::io::Result<Vec<u8>> {
+    let mut result = vec![];
+    {
+        std::io::Cursor::new(&mut result).use_bit_write(f)?;
     }
+    Ok(result)
 }
 
 impl<T: std::io::Write> UseBitWrite for T {}
