@@ -50,15 +50,16 @@ impl BitWrite<'_> {
     }
 
     /// - `size` is in the [0..8] range.
-    fn write_u8(&mut self, mut value: u8, size: u8) -> std::io::Result<()> {
+    pub fn write_u8(&mut self, mut value: u8, size: u8) -> std::io::Result<()> {
         use base2::Base2;
         value &= u8::mask(size);
-        self.buffer |= value << self.size;
+        self.buffer |= if self.size == 8 { 0 } else { value << self.size };
         self.size += size;
         if self.size >= 8 {
             self.write_buffer()?;
             self.size -= 8;
-            self.buffer = value >> (size - self.size)
+            let offset = size - self.size;
+            self.buffer = if offset == 8 { 0 } else { value >> offset };
         }
         Ok(())
     }
@@ -126,6 +127,16 @@ pub trait UseBitWrite: Sized + std::io::Write {
 ///     Ok(())
 /// });
 /// assert_eq!(v.ok(), Some(vec![0b00_011_10_1, 0b0_00101_01, 0b111_00011, 0b11111111, 0b1]));
+/// ```
+///
+/// ```
+/// let v = bitrw::use_bit_write_mem(&mut |w| {
+///     //let x = 0u8;
+///     //let c = 8u8;
+///     //let y = x << c;
+///     w.write_u8(0, 8)?;
+///     Ok(())
+/// });
 /// ```
 pub fn use_bit_write_mem(f: &mut Fn(&mut BitWrite) -> std::io::Result<()>) -> std::io::Result<Vec<u8>> {
     let mut result = vec![];
