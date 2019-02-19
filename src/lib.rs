@@ -49,6 +49,7 @@ impl BitWrite<'_> {
         Ok(())
     }
 
+    /// Little-endian bit write.
     /// - `size` is in the [0..8] range.
     pub fn write_u8(&mut self, mut value: u8, size: u8) -> std::io::Result<()> {
         use base2::Base2;
@@ -131,12 +132,10 @@ pub trait UseBitWrite: Sized + std::io::Write {
 ///
 /// ```
 /// let v = bitrw::use_bit_write_mem(&mut |w| {
-///     //let x = 0u8;
-///     //let c = 8u8;
-///     //let y = x << c;
-///     w.write_u8(0, 8)?;
+///     w.write_u8(0x4A, 8)?;
 ///     Ok(())
 /// });
+/// assert_eq!(v.ok(), Some(vec![0x4A]));
 /// ```
 pub fn use_bit_write_mem(f: &mut Fn(&mut BitWrite) -> std::io::Result<()>) -> std::io::Result<Vec<u8>> {
     let mut result = vec![];
